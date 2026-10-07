@@ -1,122 +1,98 @@
-# Runbook — Mission 01: Getting eyes on my perimeter
+# Runbook: Mission 01
 
-> **Status: first draft.** Anything marked `TODO` is something only I can fill in, like real names, times, error messages and what actually happened. Check every step against what I really did before handing it in.
+These are my notes from connecting my lab workstation to my own Sentinel workspace. I wrote them so someone else could rebuild the same setup from scratch, mistakes included. Anything still marked TODO is a detail I need to fill in from my own setup.
 
-## Goal
+## What I ended up with
 
-Connect a Windows 10 lab workstation to my own Microsoft Sentinel workspace, check that logs are arriving, and use it to find an event I did not cause (Step 6).
-
-## What I started with
-
-- A Windows 10 workstation on the lab network, reached by RDP over Tailscale
-- My own Azure for Students subscription (BeCode school account)
-- My access sheet: workstation address, login, first password
-
-## Names and settings I used
-
-| Item | Value |
+| | |
 |---|---|
-| Azure region (used everywhere) | `TODO` |
-| Resource group | `rg-sentinel-lab` |
-| Log Analytics workspace | `log-sentinel-lab` |
-| DCR (Azure Monitor, chain A) | `dcr-windowsevents` |
-| DCR (Sentinel connector, chain B) | `dcr-securityevents` |
-| Arc machine name | `TODO (e.g. WKS-Lxx)` |
+| Region (used for everything) | TODO |
+| Resource group | rg-sentinel-lab |
+| Log Analytics workspace | log-sentinel-lab (Sentinel enabled on it) |
 | Daily cap | 0.2 GB/day |
+| Workstation in Arc | TODO |
+| DCR from Azure Monitor (chain A) | dcr-windowsevents: Application + System only now |
+| DCR from the Sentinel connector (chain B) | dcr-securityevents: Security log, "Common" set |
+
+I named everything type-first (rg-, log-, dcr-) so I can tell what something is from its name alone.
 
 ---
 
-## Build order
+## How I built it, in order
 
-### 0. Get on the lab network (Tailscale)
-1. Opened Tailscale on my laptop and signed in with the account my coach gave me.
-2. Waited for the coach to approve my device.
-3. `ping <workstation-address>` until I got replies. **Do not open RDP before the ping works.**
+### 1. Getting onto the workstation
 
-What broke: `TODO (or "nothing")`
+The workstation isn't on the internet, so I first connected to the lab network with Tailscale on my laptop and waited for the coach to approve my device. Before trying RDP I pinged the workstation address from my access sheet. If the ping doesn't answer, RDP won't work either, and the error RDP gives you is less clear.
 
-### 1. Reach the machine (RDP)
-1. Connected with `TODO (mstsc / Windows App / Remmina)` using the address and account from my sheet.
-2. Changed my password at first logon, as expected.
+Once the ping worked I connected with TODO (RDP client) and changed the password at first login.
 
-What broke: `TODO`
+### 2. Setting up the Azure side
 
-### 2. Build the SIEM
-1. **Azure for Students:** portal → *Education* → *Sign up now* → *Start free*. Used my **BeCode school account** (top-right of the portal must show BECODE). Country: Belgium. Address: BeCentral, Cantersteen 15, 1000 Brussels.
-   Check: *Education → Overview* shows 100 USD / 365 days.
-2. **Allowed region:** portal → *Policy → Assignments → Allowed resource deployment regions*. Picked `TODO`, because `TODO (EU? offered for RG, workspace and Arc?)`.
-3. **Resource group** `rg-sentinel-lab` → **Log Analytics workspace** `log-sentinel-lab` (Pay-as-you-go, Per GB 2018) → **Microsoft Sentinel** on that workspace. The 31-day free trial started at that point.
-4. **Daily cap:** workspace → *Settings → Usage and estimated costs → Daily cap* → On, 0.2 GB/day.
-   The trade-off: when the cap is reached, collection stops until the next day, so the cap is a safety net and should sit above normal volume.
+I activated Azure for Students with my BeCode school account. Signing in with a personal Microsoft account here leads to an empty subscription. I checked the Education page showed the 100 USD credit before going further.
 
-What broke: `TODO (e.g. RequestDisallowedByAzure because of the region policy?)`
+Next I had to pick a region. Our student subscriptions only allow a few regions, and the list isn't the same for everyone. I found mine under Policy → Assignments → "Allowed resource deployment regions" and picked TODO, because TODO. After that I used that one region for every resource.
 
-### 3. Connect the machine
-**3.1 Azure Arc**
-1. Portal → *Azure Arc → Machines → Onboard/Create → Onboard existing machines*.
-2. Settings: same RG and region · Windows · **untick Connect SQL Server** · Public endpoint · Authenticate machines manually · nothing paid enabled under *Management*.
-3. On the workstation, PowerShell **as administrator**:
-   ```powershell
-   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-   ```
-   then pasted the Arc script.
-4. Signed in when the browser opened inside the VM.
-5. *Azure Arc → Machines* → refreshed until the machine showed **Connected**.
+Then I created, in this order:
+1. the resource group,
+2. the Log Analytics workspace (Pay-as-you-go pricing),
+3. Microsoft Sentinel on top of the workspace. This starts a 31-day free trial.
 
-What broke and how I fixed it: `TODO`. These are the traps the mission warns about. Keep the ones that happened to me and delete the rest:
-- **The script was blocked by the execution policy.** Fix: run the `Set-ExecutionPolicy` line in the same admin window, then run the script again.
-- **`(400) Bad Request` from `Invoke-WebRequest`.** This is only the failed error report, not the real problem. Fix: check admin rights, the execution policy and the region.
-- **`RequestDisallowedByAzure` / 401 about MFA.** The agent installed, but the browser sign-in inside the VM had no MFA. Fix: in the same window I ran
-  ```powershell
-  & "$env:ProgramW6432\AzureConnectedMachineAgent\azcmagent.exe" connect --resource-group "$env:RESOURCE_GROUP" --tenant-id "$env:TENANT_ID" --location "$env:LOCATION" --subscription-id "$env:SUBSCRIPTION_ID" --cloud "$env:CLOUD" --tags 'ArcSQLServerExtensionDeployment=Disabled' --use-device-code
-  ```
-  and entered the code at `https://login.microsoft.com/device` **from my laptop**.
+Last, I set a daily cap of 0.2 GB on the workspace (Usage and estimated costs → Daily cap). Our credit is limited, and one noisy log source could use a lot of it overnight. The cap is a safety net, not a way to save money every day: once it's hit, collection stops until the next day, so it has to sit well above normal volume.
 
-**⚠️ My mistake here (this actually happened to me):**
-- **What I did:** the `--use-device-code` command printed a link (`https://login.microsoft.com/device`) and a code. I opened the link and entered the code **in the browser on the remote workstation (inside my RDP session)**, not on my own laptop.
-- **What happened:** the sign-in still came from the VM's browser, which never asks for MFA. Azure refused to create the machine again, with the same MFA error. `TODO: confirm the exact message I saw`
-- **Why:** the device-code step exists so the sign-in happens in a browser that **is** signed in with MFA, which is the one on my laptop where I'm already logged into the Azure portal. Doing it inside the VM changes nothing.
-- **Fix:** ran the same `azcmagent connect ... --use-device-code` command again in the same admin PowerShell window. Then I opened `https://login.microsoft.com/device` **on my laptop**, entered the new code and signed in. The window ended with *Machine connected to Azure*.
-- **Lesson for the next person:** when PowerShell on the workstation gives you a link and a code, **copy them to your own laptop**. Don't click the link inside the RDP session.
+### 3. Connecting the workstation with Azure Arc
 
-**3.2 Data Collection Rule (chain A)**
-1. *Monitor → Settings → Data Collection Rules → + Create* (from Azure Monitor, **not** Sentinel).
-2. Name `dcr-windowsevents`, same RG and region, *Agent-based – Windows or Linux*, no DCE, no managed identity.
-3. Resources: only my Arc machine.
-4. Data source: Windows Event Logs (Basic). Application and System: Critical, Error, Warning. Security: Audit success and Audit failure. Information and Verbose left unticked because they are too noisy.
-5. Destination: Log Analytics → `log-sentinel-lab`. The data lands in the **`Event`** table.
-6. Check: *Arc → machine → Extensions* shows **AzureMonitorWindowsAgent = Succeeded** (after about `TODO` minutes).
+Azure can't see a machine that lives on our lab network, so the first job is to register it with Azure Arc. I started from Azure Arc → Machines → Onboard existing machines and used these settings: same resource group and region, Windows, SQL Server option unticked, public endpoint, manual authentication. I didn't enable anything paid.
 
-Warning: do **not** install the `AzureMonitorAgentClientSetup.msi`. The agent comes in through Arc.
+On the workstation I opened PowerShell as administrator. Windows 10 blocks downloaded scripts by default, so before pasting the Arc script I ran this:
 
-What broke: `TODO`
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+```
 
-### 4. Prove it is alive
-In *Sentinel → Logs* (switch the editor to **KQL mode**), I ran `Heartbeat | take 10`. My machine name showed up after `TODO` minutes.
+It only affects that one window.
 
-Reflexes:
-- **Check `Heartbeat` first.** If it is missing, the problem is the connection, not the logs.
-- **Don't check the agent from the machine.** `Get-Service AzureMonitorAgent` returns nothing on an Arc machine. The SIEM is the place to check.
+The script installed the agent and opened a browser inside the VM for me to sign in. The agent installed, but Azure refused to create the machine because the sign-in hadn't used MFA, and the browser in the VM never asks for it. The fix is a device-code sign-in, run in the same admin window:
 
-**Event Viewer exercise.** In the Security log, filtered on 4624, I found my own logon:
-| Time | Account (New Logon) | Logon Type | Source network address |
+```powershell
+& "$env:ProgramW6432\AzureConnectedMachineAgent\azcmagent.exe" connect --resource-group "$env:RESOURCE_GROUP" --tenant-id "$env:TENANT_ID" --location "$env:LOCATION" --subscription-id "$env:SUBSCRIPTION_ID" --cloud "$env:CLOUD" --tags 'ArcSQLServerExtensionDeployment=Disabled' --use-device-code
+```
+
+This prints a link and a code.
+
+**This is where I made a mistake.** I opened the link and entered the code in the browser inside the VM, through my RDP session. That is the same browser without MFA, so it failed the same way (TODO: exact message). The whole point of the device code is to do the sign-in somewhere you already have MFA, which is your own laptop. I ran the command again, entered the new code on my laptop's browser where I was already logged into the portal, and it finished with "Machine connected to Azure". A few minutes later the machine showed as Connected in Arc.
+
+**Note for whoever does this next:** when PowerShell on the workstation gives you a link and a code, type them on your own laptop, not inside the RDP session.
+
+TODO: other problems I hit at this step, if any.
+
+### 4. Choosing what to collect (chain A)
+
+Arc makes the machine visible to Azure, but nothing is sent until a data collection rule says what to collect and where to send it. I created dcr-windowsevents from Azure Monitor → Data Collection Rules (not from inside Sentinel):
+- resource: only my Arc machine
+- Windows Event Logs: Application and System at Critical, Error and Warning, plus the Security log (audit success and failure). I left Information off because it's far too noisy.
+- destination: my workspace. Everything from this rule lands in the `Event` table.
+
+Attaching the rule is what installs the Azure Monitor Agent on the machine as an Arc extension. I didn't download any installer myself. It showed as Succeeded under the machine's Extensions after about TODO minutes.
+
+### 5. Checking that data arrives
+
+In Sentinel → Logs (switched to KQL mode) I ran `Heartbeat | take 10` until my machine showed up, which took about TODO minutes. I now always check Heartbeat first: if it's there, the connection works and any problem is somewhere else. Checking services on the workstation itself doesn't help, because on an Arc machine the agent doesn't run under the name you'd expect.
+
+While waiting, I found my own RDP logon in Event Viewer on the workstation so I could compare it with what the SIEM showed later:
+
+| Time | Account (under "New Logon") | Logon type | Source address |
 |---|---|---|---|
-| `TODO` | `TODO` | `TODO (10 = new RDP, 7 = reconnect)` | `TODO` |
+| TODO | TODO | TODO | TODO |
 
-### 5. First questions
-I ran queries 1–4 (see `queries.kql`). Query 2 compares `TimeGenerated` with `ingestion_time()`. It tells "the source is dead" apart from "the source's clock is wrong". The delay I saw: `TODO`.
+Then I started asking questions with KQL (all in `queries.kql`): when the machine last checked in, whether its data is current (event time vs ingestion time, to catch a wrong clock), what levels of events come in, and who logged on. The logons were in `Event`, but the account and logon type were buried in one long text field.
 
-### 5b. The SOC way (chain B)
-1. *Sentinel → Content hub* → installed **Windows Security Events**. If you get "page moved to Defender portal", do a hard reload (`Ctrl+F5` / `Cmd+Shift+R`).
-2. *Data connectors* → **Windows Security Events via AMA**, not the `[DEPRECATED]` legacy one → *Open connector page* → *+ Create data collection rule*.
-3. Name `dcr-securityevents`, same RG, my Arc machine, events: **Common** (the default is *All*, so I changed it).
-4. After about `TODO` minutes, query 5 returned `SecurityEvent` rows with `Account`, `LogonType` and `IpAddress` as columns.
-5. **Removed the duplicate:** opened `dcr-windowsevents` → Windows Event Logs → unticked both Security boxes → Save at `TODO (time)`.
-   Check: about 15 minutes later, the newest row of query 4 (`Event`) was still older than that time, while query 5 (`SecurityEvent`) kept getting new rows.
+### 6. Moving the Security log to the Sentinel connector (chain B)
 
-Things that surprised me: one RDP connection gives several 4624 events in the same second (type 3 for NLA, then 10 or 7). `IpAddress` shows `10.50.0.1`, which is the lab gateway, not my laptop.
+Next I collected the Security log the way Sentinel expects it. In Sentinel I installed the Windows Security Events solution from the Content hub. Then I opened the **Windows Security Events via AMA** connector (not the deprecated legacy one) and created dcr-securityevents for my machine with the **Common** event set. The default is "All", which is too much.
 
-What broke: `TODO`
+It needed another TODO minutes before rows showed up in `SecurityEvent`, but there `Account`, `LogonType` and `IpAddress` are separate columns. One RDP connection gives several 4624 events at once (a type 3 for the network authentication, then a 10 or a 7). The IP address is the lab gateway (10.50.0.1), not my laptop.
+
+At that point every security event was being collected twice, once per chain. So I edited dcr-windowsevents and unticked the two Security boxes, at TODO (time). About 15 minutes later, `Event` had no Security rows newer than that time, while `SecurityEvent` kept getting new ones.
 
 ---
 
@@ -124,160 +100,23 @@ What broke: `TODO`
 
 | | Chain A: Azure Monitor DCR → `Event` | Chain B: Sentinel connector → `SecurityEvent` |
 |---|---|---|
-| Where it is set up | Azure Monitor (works without Sentinel) | Inside Sentinel (*Windows Security Events* solution) |
-| What it collects | Any Windows log (Application, System, Security…) | Security log only |
-| How events are picked | By log and level (or XPath) | Preset sets: All / Common / Minimal / Custom |
-| Shape of the data | One text field (`RenderedDescription`), so I have to parse it myself | Already split into columns (`Account`, `LogonType`, `IpAddress`…) |
-| Sentinel rules and workbooks | Mostly not written for it | Written for it |
-| Typical users | IT operations | Security teams / SOC |
-| Cost | Per GB | Per GB. With both on, every security event is paid twice |
+| Set up from | Azure Monitor, works without Sentinel | Sentinel, needs the Windows Security Events solution |
+| Collects | Any Windows log | Only the Security log |
+| How you choose events | By log and severity level | Preset sets (All / Common / Minimal / Custom) |
+| What the data looks like | One text blob per event, you parse it yourself | Already split into columns |
+| Sentinel's built-in rules and workbooks | Mostly don't use it | Built for it |
+| Who usually uses it | IT operations | Security teams |
+| Cost | Per GB | Per GB, so running both means paying twice for security events |
 
-**Why I kept only chain B for the Security log** (`TODO: rewrite this in my own words`):
-With both chains on, the same logon is stored twice, in two tables. That means two places to search for one fact, two answers that can drift apart, and paying twice for the same data. Chain B gives the fields an analyst needs already in columns, and Sentinel's detections, workbooks and the next missions are built on `SecurityEvent`. Chain A stays useful for what B can't collect: the Application and System logs.
-
----
-
-## If I had to rebuild this
-`TODO: the 3–5 things I'd tell the next person.` Starting points:
-- Choose the region from the policy list first, then use it everywhere.
-- Before running the Arc script: admin PowerShell plus the `Set-ExecutionPolicy` line.
-- Enter the device-login code on your own laptop, never in the browser inside the VM.
-- Give the agent 15–30 minutes. Check `Heartbeat` before assuming anything is broken.
-# Runbook — Mission 01: Getting eyes on my perimeter
-
-> **Status: first draft.** Anything marked `TODO` is something only I can fill in, like real names, times, error messages and what actually happened. Check every step against what I really did before handing it in.
-
-## Goal
-
-Connect a Windows 10 lab workstation to my own Microsoft Sentinel workspace, check that logs are arriving, and use it to find an event I did not cause (Step 6).
-
-## What I started with
-
-- A Windows 10 workstation on the lab network, reached by RDP over Tailscale
-- My own Azure for Students subscription (BeCode school account)
-- My access sheet: workstation address, login, first password
-
-## Names and settings I used
-
-| Item | Value |
-|---|---|
-| Azure region (used everywhere) | `TODO` |
-| Resource group | `rg-sentinel-lab` |
-| Log Analytics workspace | `log-sentinel-lab` |
-| DCR (Azure Monitor, chain A) | `dcr-windowsevents` |
-| DCR (Sentinel connector, chain B) | `dcr-securityevents` |
-| Arc machine name | `TODO (e.g. WKS-Lxx)` |
-| Daily cap | 0.2 GB/day |
+**Why I kept only chain B for the Security log** (TODO: check this sounds like me):
+Running both meant every logon was stored twice in two different tables. That's two places to look for the same thing, results that can drift apart, and double the cost. Chain B gives me the fields I actually search on, and Sentinel's detections and the next missions are built on `SecurityEvent`. Chain A is still useful for what chain B can't collect: the Application and System logs.
 
 ---
 
-## Build order
+## If I did it again
 
-### 0. Get on the lab network (Tailscale)
-1. Opened Tailscale on my laptop and signed in with the account my coach gave me.
-2. Waited for the coach to approve my device.
-3. `ping <workstation-address>` until I got replies. **Do not open RDP before the ping works.**
-
-What broke: `TODO (or "nothing")`
-
-### 1. Reach the machine (RDP)
-1. Connected with `TODO (mstsc / Windows App / Remmina)` using the address and account from my sheet.
-2. Changed my password at first logon, as expected.
-
-What broke: `TODO`
-
-### 2. Build the SIEM
-1. **Azure for Students:** portal → *Education* → *Sign up now* → *Start free*. Used my **BeCode school account** (top-right of the portal must show BECODE). Country: Belgium. Address: BeCentral, Cantersteen 15, 1000 Brussels.
-   Check: *Education → Overview* shows 100 USD / 365 days.
-2. **Allowed region:** portal → *Policy → Assignments → Allowed resource deployment regions*. Picked `TODO`, because `TODO (EU? offered for RG, workspace and Arc?)`.
-3. **Resource group** `rg-sentinel-lab` → **Log Analytics workspace** `log-sentinel-lab` (Pay-as-you-go, Per GB 2018) → **Microsoft Sentinel** on that workspace. The 31-day free trial started at that point.
-4. **Daily cap:** workspace → *Settings → Usage and estimated costs → Daily cap* → On, 0.2 GB/day.
-   The trade-off: when the cap is reached, collection stops until the next day, so the cap is a safety net and should sit above normal volume.
-
-What broke: `TODO (e.g. RequestDisallowedByAzure because of the region policy?)`
-
-### 3. Connect the machine
-**3.1 Azure Arc**
-1. Portal → *Azure Arc → Machines → Onboard/Create → Onboard existing machines*.
-2. Settings: same RG and region · Windows · **untick Connect SQL Server** · Public endpoint · Authenticate machines manually · nothing paid enabled under *Management*.
-3. On the workstation, PowerShell **as administrator**:
-   ```powershell
-   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-   ```
-   then pasted the Arc script.
-4. Signed in when the browser opened inside the VM.
-5. *Azure Arc → Machines* → refreshed until the machine showed **Connected**.
-
-What broke and how I fixed it: `TODO`. These are the traps the mission warns about. Keep the ones that happened to me and delete the rest:
-- **The script was blocked by the execution policy.** Fix: run the `Set-ExecutionPolicy` line in the same admin window, then run the script again.
-- **`(400) Bad Request` from `Invoke-WebRequest`.** This is only the failed error report, not the real problem. Fix: check admin rights, the execution policy and the region.
-- **`RequestDisallowedByAzure` / 401 about MFA.** The agent installed, but the browser sign-in inside the VM had no MFA. Fix: in the same window I ran
-  ```powershell
-  & "$env:ProgramW6432\AzureConnectedMachineAgent\azcmagent.exe" connect --resource-group "$env:RESOURCE_GROUP" --tenant-id "$env:TENANT_ID" --location "$env:LOCATION" --subscription-id "$env:SUBSCRIPTION_ID" --cloud "$env:CLOUD" --tags 'ArcSQLServerExtensionDeployment=Disabled' --use-device-code
-  ```
-  and entered the code at `https://login.microsoft.com/device` **from my laptop**.
-
-**3.2 Data Collection Rule (chain A)**
-1. *Monitor → Settings → Data Collection Rules → + Create* (from Azure Monitor, **not** Sentinel).
-2. Name `dcr-windowsevents`, same RG and region, *Agent-based – Windows or Linux*, no DCE, no managed identity.
-3. Resources: only my Arc machine.
-4. Data source: Windows Event Logs (Basic). Application and System: Critical, Error, Warning. Security: Audit success and Audit failure. Information and Verbose left unticked because they are too noisy.
-5. Destination: Log Analytics → `log-sentinel-lab`. The data lands in the **`Event`** table.
-6. Check: *Arc → machine → Extensions* shows **AzureMonitorWindowsAgent = Succeeded** (after about `TODO` minutes).
-
-Warning: do **not** install the `AzureMonitorAgentClientSetup.msi`. The agent comes in through Arc.
-
-What broke: `TODO`
-
-### 4. Prove it is alive
-In *Sentinel → Logs* (switch the editor to **KQL mode**), I ran `Heartbeat | take 10`. My machine name showed up after `TODO` minutes.
-
-Reflexes:
-- **Check `Heartbeat` first.** If it is missing, the problem is the connection, not the logs.
-- **Don't check the agent from the machine.** `Get-Service AzureMonitorAgent` returns nothing on an Arc machine. The SIEM is the place to check.
-
-**Event Viewer exercise.** In the Security log, filtered on 4624, I found my own logon:
-| Time | Account (New Logon) | Logon Type | Source network address |
-|---|---|---|---|
-| `TODO` | `TODO` | `TODO (10 = new RDP, 7 = reconnect)` | `TODO` |
-
-### 5. First questions
-I ran queries 1–4 (see `queries.kql`). Query 2 compares `TimeGenerated` with `ingestion_time()`. It tells "the source is dead" apart from "the source's clock is wrong". The delay I saw: `TODO`.
-
-### 5b. The SOC way (chain B)
-1. *Sentinel → Content hub* → installed **Windows Security Events**. If you get "page moved to Defender portal", do a hard reload (`Ctrl+F5` / `Cmd+Shift+R`).
-2. *Data connectors* → **Windows Security Events via AMA**, not the `[DEPRECATED]` legacy one → *Open connector page* → *+ Create data collection rule*.
-3. Name `dcr-securityevents`, same RG, my Arc machine, events: **Common** (the default is *All*, so I changed it).
-4. After about `TODO` minutes, query 5 returned `SecurityEvent` rows with `Account`, `LogonType` and `IpAddress` as columns.
-5. **Removed the duplicate:** opened `dcr-windowsevents` → Windows Event Logs → unticked both Security boxes → Save at `TODO (time)`.
-   Check: about 15 minutes later, the newest row of query 4 (`Event`) was still older than that time, while query 5 (`SecurityEvent`) kept getting new rows.
-
-Things that surprised me: one RDP connection gives several 4624 events in the same second (type 3 for NLA, then 10 or 7). `IpAddress` shows `10.50.0.1`, which is the lab gateway, not my laptop.
-
-What broke: `TODO`
-
----
-
-## Chain A vs chain B
-
-| | Chain A: Azure Monitor DCR → `Event` | Chain B: Sentinel connector → `SecurityEvent` |
-|---|---|---|
-| Where it is set up | Azure Monitor (works without Sentinel) | Inside Sentinel (*Windows Security Events* solution) |
-| What it collects | Any Windows log (Application, System, Security…) | Security log only |
-| How events are picked | By log and level (or XPath) | Preset sets: All / Common / Minimal / Custom |
-| Shape of the data | One text field (`RenderedDescription`), so I have to parse it myself | Already split into columns (`Account`, `LogonType`, `IpAddress`…) |
-| Sentinel rules and workbooks | Mostly not written for it | Written for it |
-| Typical users | IT operations | Security teams / SOC |
-| Cost | Per GB | Per GB. With both on, every security event is paid twice |
-
-**Why I kept only chain B for the Security log** (`TODO: rewrite this in my own words`):
-With both chains on, the same logon is stored twice, in two tables. That means two places to search for one fact, two answers that can drift apart, and paying twice for the same data. Chain B gives the fields an analyst needs already in columns, and Sentinel's detections, workbooks and the next missions are built on `SecurityEvent`. Chain A stays useful for what B can't collect: the Application and System logs.
-
----
-
-## If I had to rebuild this
-`TODO: the 3–5 things I'd tell the next person.` Starting points:
-- Choose the region from the policy list first, then use it everywhere.
-- Before running the Arc script: admin PowerShell plus the `Set-ExecutionPolicy` line.
-- Give the agent 15–30 minutes. Check `Heartbeat` before assuming anything is broken.
-
+- Pick the region from the policy list before creating anything.
+- Use an admin PowerShell window and set the execution policy before running the Arc script.
+- Do the device-code sign-in on your own laptop, not in the VM.
+- Give the agent 15–30 minutes and check Heartbeat before deciding something's broken.
+- TODO: anything else
