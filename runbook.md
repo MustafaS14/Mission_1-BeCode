@@ -10,7 +10,7 @@ These are my notes from connecting my lab workstation to my own Sentinel workspa
 | Resource group | rg-sentinel-lab |
 | Log Analytics workspace | log-sentinel-lab (Sentinel enabled on it) |
 | Daily cap | 0.2 GB/day |
-| Workstation in Arc | TODO |
+| Workstation in Arc | WKS-L58 (WKS-L58.hamilton.corp) |
 | DCR from Azure Monitor (chain A) | dcr-windowsevents: Application + System only now |
 | DCR from the Sentinel connector (chain B) | dcr-securityevents: Security log, "Common" set |
 
@@ -90,7 +90,7 @@ Then I started asking questions with KQL (all in `queries.kql`): when the machin
 
 Next I collected the Security log the way Sentinel expects it. In Sentinel I installed the Windows Security Events solution from the Content hub. Then I opened the **Windows Security Events via AMA** connector (not the deprecated legacy one) and created dcr-securityevents for my machine with the **Common** event set. The default is "All", which is too much.
 
-It needed another TODO minutes before rows showed up in `SecurityEvent`, but there `Account`, `LogonType` and `IpAddress` are separate columns. One RDP connection gives several 4624 events at once (a type 3 for the network authentication, then a 10 or a 7). The IP address is the lab gateway (10.50.0.1), not my laptop.
+It needed another TODO minutes before rows showed up in `SecurityEvent`, but there `Account`, `LogonType` and `IpAddress` are separate columns. The first rows I got (7 October 2026, around 15:08 UTC) were WKS-L58 logging on as NT AUTHORITY\SYSTEM with logon type 5. That's Windows starting services, not a person. One RDP connection gives several 4624 events at once (a type 3 for the network authentication, then a 10 or a 7). The IP address is the lab gateway (10.50.0.1), not my laptop.
 
 At that point every security event was being collected twice, once per chain. So I edited dcr-windowsevents and unticked the two Security boxes, at TODO (time). About 15 minutes later, `Event` had no Security rows newer than that time, while `SecurityEvent` kept getting new ones.
 
