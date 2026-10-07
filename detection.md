@@ -1,18 +1,19 @@
-# Detection — Mission 01, Step 6
+# Detection: Mission 01, Step 6
 
-> **Status: empty template.** Step 6 hasn't happened yet, or I haven't written up what I found. Every `TODO` must come from my own SIEM. Don't guess.
+Once everyone's machine was connected, the coach ran something on all our workstations at the same time, without telling us what it was or when it would happen. This is what I found in my SIEM.
 
-## What I was told
-The coach ran something on every workstation at once. We weren't told what it was or when it would start. My job was to find it in my SIEM and show it.
+(TODO: everything below has to come from my own results. Fill it in after Step 6.)
 
-## How I looked for it
-1. Checked `Heartbeat` first to make sure my machine was still reporting during the window.
-2. Looked for anything unusual in `SecurityEvent` around the time of the session: event IDs I don't normally see, accounts I don't recognise, logons from unexpected places.
-3. `TODO: describe the steps I actually took and what led me to the event.`
+## How I went looking
+
+First I checked that my machine was still sending heartbeats during that time. Otherwise "nothing found" could just mean "nothing collected". Then I went through `SecurityEvent` around the time it happened, looking for anything that didn't match my own activity: event IDs I hadn't seen before, accounts I don't use, logons I didn't make.
+
+TODO: what actually led me to it
 
 ## The query
+
 ```kql
-// TODO: the exact query that shows the event
+// TODO: the exact query I used
 SecurityEvent
 | where TimeGenerated > ago(TODO)
 | where EventID == TODO
@@ -20,18 +21,22 @@ SecurityEvent
 | order by TimeGenerated desc
 ```
 
-## The result
-| TimeGenerated (UTC) | Computer | EventID | Account | Details |
-|---|---|---|---|---|
-| `TODO` | `TODO` | `TODO` | `TODO` | `TODO` |
+## What it returned
 
-(Optional: add a screenshot of the result.)
+| Time (UTC) | Computer | Event ID | Account | What it shows |
+|---|---|---|---|---|
+| TODO | TODO | TODO | TODO | TODO |
+
+TODO: screenshot of the result
 
 ## What I think happened
-`TODO: in my own words. What was done, by which account, when, and how.`
 
-## How I know it wasn't me
-`TODO: e.g. account I don't use, time I wasn't connected, logon type or source address that doesn't match my RDP sessions (mine come from 10.50.0.1, logon type 10/7).`
+TODO
 
-## Open questions
-`TODO: anything I couldn't explain, or what I would check next.`
+## Why I know it wasn't me
+
+TODO. Things to compare against: my own RDP logons come in from 10.50.0.1 with logon type 10 or 7, under my account, at times I was connected.
+
+## What I'd look at next
+
+TODO
