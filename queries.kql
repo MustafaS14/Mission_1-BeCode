@@ -1,50 +1,49 @@
-// Mission 01 — queries I used in Sentinel → Logs (KQL mode)
-// DRAFT: delete any query I didn't actually run, and add the ones I did.
+// Mission 01: the KQL I ran in Sentinel → Logs
+// TODO: remove anything I didn't actually run
 
-// Is my machine sending heartbeats at all? (first check after creating the DCR)
+// Is my machine showing up at all yet?
 Heartbeat
 | take 10
 
-// Is my machine talking to me, and when did it last check in?
+// When did my machine last check in?
 Heartbeat
 | summarize LastSeen = max(TimeGenerated) by Computer
 
-// Is the data current, or is the source's clock wrong? (event time vs ingestion time)
+// Is the data current, or is the machine's clock off? (event time vs. when it reached the workspace)
 Heartbeat
 | project TimeGenerated, ingestion_time(), Delay = ingestion_time() - TimeGenerated
 | take 20
 
-// What kinds of events is chain A (Event table) collecting, by level?
+// What severity levels are coming into the Event table?
 Event
 | summarize count() by EventLevelName
 
-// Who logged in, and when? (chain A — Security log in the Event table, as text)
+// Who logged on to my machine, and when? (Event table, where the details are one big text field)
 Event
 | where EventLog == "Security" and EventID == 4624
 | project TimeGenerated, Computer, RenderedDescription
 | order by TimeGenerated desc
 
-// Which of those chain A logons are mine and not the computer's own? (TODO: put my account name in)
+// Same question, but only my own logons, filtering out the machine's own accounts
 Event
 | where EventLog == "Security" and EventID == 4624
-| where RenderedDescription has "TODO-my-account"
+| where RenderedDescription has "TODO-my-username"
 | project TimeGenerated, Computer, RenderedDescription
 | order by TimeGenerated desc
 
-// Who logged in, and when? (chain B, SecurityEvent table, already split into columns)
+// Who logged on, and how? (SecurityEvent, where account, logon type and IP are proper columns)
 SecurityEvent
 | where EventID == 4624
 | project TimeGenerated, Computer, Account, LogonType, IpAddress
 | order by TimeGenerated desc
 
-// Did chain A really stop collecting Security events after I removed them from dcr-windowsevents?
+// Did the Event table really stop getting Security logs after I removed them from dcr-windowsevents?
 Event
 | where EventLog == "Security"
-| summarize LastSecurityEventInEventTable = max(TimeGenerated)
+| summarize LastSecurityRow = max(TimeGenerated)
 
-// What happened on my machine in the Step 6 window that wasn't me? (TODO: set the time window)
+// Step 6: what happened on my machine during the window when it wasn't me? (TODO: fill in the times)
 SecurityEvent
-| where TimeGenerated between (datetime(TODO-start) .. datetime(TODO-end))
+| where TimeGenerated between (datetime(TODO) .. datetime(TODO))
 | summarize count() by EventID, Activity
 | order by count_ desc
-
