@@ -24,13 +24,6 @@ Event
 | project TimeGenerated, Computer, RenderedDescription
 | order by TimeGenerated desc
 
-// Same question, but only my own logons, filtering out the machine's own accounts
-Event
-| where EventLog == "Security" and EventID == 4624
-| where RenderedDescription has "TODO-my-username"
-| project TimeGenerated, Computer, RenderedDescription
-| order by TimeGenerated desc
-
 // Who logged on, and how? (SecurityEvent, where account, logon type and IP are proper columns)
 SecurityEvent
 | where EventID == 4624
