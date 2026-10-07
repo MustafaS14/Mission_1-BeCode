@@ -6,7 +6,7 @@ These are my notes from connecting my lab workstation to my own Sentinel workspa
 
 | | |
 |---|---|
-| Region (used for everything) | TODO |
+| Region (used for everything) | francecentral |
 | Resource group | rg-sentinel-lab |
 | Log Analytics workspace | log-sentinel-lab (Sentinel enabled on it) |
 | Daily cap | 0.2 GB/day |
@@ -30,7 +30,7 @@ Once the ping worked I connected with TODO (RDP client) and changed the password
 
 I activated Azure for Students with my BeCode school account. Signing in with a personal Microsoft account here leads to an empty subscription. I checked the Education page showed the 100 USD credit before going further.
 
-Next I had to pick a region. Our student subscriptions only allow a few regions, and the list isn't the same for everyone. I found mine under Policy → Assignments → "Allowed resource deployment regions" and picked TODO, because TODO. After that I used that one region for every resource.
+Next I had to pick a region. Our student subscriptions only allow a few regions, and the list isn't the same for everyone. I found mine under Policy → Assignments → "Allowed resource deployment regions" and picked francecentral. It was on my list and it's in the EU, so my logs stay in Europe. After that I used that one region for every resource.
 
 Then I created, in this order:
 1. the resource group,
@@ -80,9 +80,9 @@ In Sentinel → Logs (switched to KQL mode) I ran `Heartbeat | take 10` until my
 
 While waiting, I found my own RDP logon in Event Viewer on the workstation so I could compare it with what the SIEM showed later:
 
-| Time | Account (under "New Logon") | Logon type | Source address |
-|---|---|---|---|
-| TODO | TODO | TODO | TODO |
+| Time | Logon type | Source address |
+|---|---|---|
+| TODO | TODO | TODO |
 
 Then I started asking questions with KQL (all in `queries.kql`): when the machine last checked in, whether its data is current (event time vs ingestion time, to catch a wrong clock), what levels of events come in, and who logged on. The logons were in `Event`, but the account and logon type were buried in one long text field.
 
