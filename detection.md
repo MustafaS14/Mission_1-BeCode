@@ -35,7 +35,7 @@ TODO
 
 ## Why I know it wasn't me
 
-TODO. Things to compare against: my own RDP logons come in from 10.50.0.1 with logon type 10 or 7, under my account, at times I was connected.
+TODO. Things to compare against: my own RDP logons come in from 10.50.0.1 with logon type 10 or 7, at times I was connected.
 
 ## What I'd look at next
 
