@@ -76,7 +76,7 @@ Attaching the rule is what installs the Azure Monitor Agent on the machine as an
 
 ### 5. Checking that data arrives
 
-In Sentinel → Logs (switched to KQL mode) I ran `Heartbeat | take 10` until my machine showed up. The first heartbeat arrived on 7 October 2026 at 14:16 UTC, about TODO minutes after I created the rule. I now always check Heartbeat first: if it's there, the connection works and any problem is somewhere else. Checking services on the workstation itself doesn't help, because on an Arc machine the agent doesn't run under the name you'd expect.
+In Sentinel → Logs (switched to KQL mode) I ran `Heartbeat | take 10` until my machine showed up. The first heartbeat arrived on 7 October 2026 at 14:16 UTC, about 4 minutes after I created `dcr-windowsevents` (14:12 UTC). I now always check Heartbeat first: if it's there, the connection works and any problem is somewhere else. Checking services on the workstation itself doesn't help, because on an Arc machine the agent doesn't run under the name you'd expect.
 
 To find my own RDP logon, I searched `SecurityEvent` for successful logons (4624) with logon type 10 or 7, the two types an RDP session produces, and took the earliest one (query in `queries.kql`):
 
@@ -94,7 +94,7 @@ Next I collected the Security log the way Sentinel expects it. In Sentinel I ins
 
 It needed another TODO minutes before rows showed up in `SecurityEvent`, but there `Account`, `LogonType` and `IpAddress` are separate columns. The first rows I got (7 October 2026, around 15:08 UTC) were WKS-L58 logging on as NT AUTHORITY\SYSTEM with logon type 5. That's Windows starting services, not a person. One RDP connection gives several 4624 events at once (a type 3 for the network authentication, then a 10 or a 7). The IP address is the lab gateway (10.50.0.1), not my laptop.
 
-At that point every security event was being collected twice, once per chain. So I edited dcr-windowsevents and unticked the two Security boxes, at TODO (time). About 15 minutes later, `Event` had no Security rows newer than that time, while `SecurityEvent` kept getting new ones.
+At that point every security event was being collected twice, once per chain. So I edited dcr-windowsevents and unticked the two Security boxes, at 15:09 UTC. About 15 minutes later, `Event` had no Security rows newer than that time, while `SecurityEvent` kept getting new ones.
 
 ---
 
