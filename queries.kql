@@ -9,6 +9,11 @@ Heartbeat
 Heartbeat
 | summarize LastSeen = max(TimeGenerated) by Computer
 
+// When did my machine send its very first heartbeat?
+Heartbeat
+| where Computer startswith "WKS-L58"
+| summarize FirstHeartbeat = min(TimeGenerated)
+
 // Is the data current, or is the machine's clock off? (event time vs. when it reached the workspace)
 Heartbeat
 | project TimeGenerated, ingestion_time(), Delay = ingestion_time() - TimeGenerated
