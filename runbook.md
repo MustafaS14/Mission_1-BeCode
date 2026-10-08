@@ -76,7 +76,7 @@ Attaching the rule is what installs the Azure Monitor Agent on the machine as an
 
 ### 5. Checking that data arrives
 
-In Sentinel → Logs (switched to KQL mode) I ran `Heartbeat | take 10` until my machine showed up, which took about TODO minutes. I now always check Heartbeat first: if it's there, the connection works and any problem is somewhere else. Checking services on the workstation itself doesn't help, because on an Arc machine the agent doesn't run under the name you'd expect.
+In Sentinel → Logs (switched to KQL mode) I ran `Heartbeat | take 10` until my machine showed up. The first heartbeat arrived on 7 October 2026 at 14:16 UTC, about TODO minutes after I created the rule. I now always check Heartbeat first: if it's there, the connection works and any problem is somewhere else. Checking services on the workstation itself doesn't help, because on an Arc machine the agent doesn't run under the name you'd expect.
 
 To find my own RDP logon, I searched `SecurityEvent` for successful logons (4624) with logon type 10 or 7, the two types an RDP session produces, and took the earliest one (query in `queries.kql`):
 
