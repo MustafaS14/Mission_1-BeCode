@@ -30,6 +30,13 @@ SecurityEvent
 | project TimeGenerated, Computer, Account, LogonType, IpAddress
 | order by TimeGenerated desc
 
+// When was my own first RDP logon? (logon type 10 = new session, 7 = reconnecting to an open one)
+SecurityEvent
+| where EventID == 4624 and LogonType in (10, 7)
+| project TimeGenerated, LogonType, IpAddress
+| order by TimeGenerated asc
+| take 1
+
 // Did the Event table really stop getting Security logs after I removed them from dcr-windowsevents?
 Event
 | where EventLog == "Security"
