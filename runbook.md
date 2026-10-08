@@ -78,11 +78,13 @@ Attaching the rule is what installs the Azure Monitor Agent on the machine as an
 
 In Sentinel → Logs (switched to KQL mode) I ran `Heartbeat | take 10` until my machine showed up, which took about TODO minutes. I now always check Heartbeat first: if it's there, the connection works and any problem is somewhere else. Checking services on the workstation itself doesn't help, because on an Arc machine the agent doesn't run under the name you'd expect.
 
-While waiting, I found my own RDP logon in Event Viewer on the workstation so I could compare it with what the SIEM showed later:
+To find my own RDP logon, I searched `SecurityEvent` for successful logons (4624) with logon type 10 or 7, the two types an RDP session produces, and took the earliest one (query in `queries.kql`):
 
 | Time | Logon type | Source address |
 |---|---|---|
-| TODO | TODO | TODO |
+| 7 Oct 2026, 23:16:47 UTC | 7 | 10.50.0.1 |
+
+Logon type 7 means I reconnected to a session that was already open. A brand-new RDP session would show as 10. The address is the lab gateway that relays my connection, not my laptop.
 
 Then I started asking questions with KQL (all in `queries.kql`): when the machine last checked in, whether its data is current (event time vs ingestion time, to catch a wrong clock), what levels of events come in, and who logged on. The logons were in `Event`, but the account and logon type were buried in one long text field.
 
