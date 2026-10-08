@@ -6,7 +6,7 @@ Once everyone's machine was connected, the coach ran something on all our workst
 
 ## How I went looking
 
-First I checked that my machine was still sending heartbeats during that time. Otherwise "nothing found" could just mean "nothing collected". Then I went through `SecurityEvent` around the time it hap[...]
+First I checked that my machine was still sending heartbeats during that time. Otherwise "nothing found" could just mean "nothing collected". Then I went through `SecurityEvent` around the time it happened, looking for anything that didn't match my own activity: event IDs I hadn't seen before, accounts I don't use, logons I didn't make.
 
 TODO: what actually led me to it
 
