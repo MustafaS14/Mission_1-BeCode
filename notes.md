@@ -1,5 +1,3 @@
-line1
-  line2 `x`
 # Notes: Mission 01 (CTF on hamilton.corp)
 
 My notes from the BeCode Hamilton CTF. I explored my own seat first, then looked into the files that appeared on my Desktop, then into what the coach changed on my seat at step 6 (the intrusion). Every challenge is written the same way: question, "before you leave" (when the category has one), hint 1, hint 2, then what I actually did.
