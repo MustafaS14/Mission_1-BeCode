@@ -1,6 +1,6 @@
 # Runbook: Mission 01
 
-These are my notes from connecting my lab workstation to my own Sentinel workspace. I wrote them so someone else could rebuild the same setup from scratch, mistakes included. Anything still marked TODO is a detail I need to fill in from my own setup.
+These are my notes from connecting my lab workstation to my own Sentinel workspace. I wrote them so someone else could rebuild the same setup from scratch, mistakes included. Times are in UTC and come from my workspace and the resource group's Activity log.
 
 ## What I ended up with
 
@@ -24,7 +24,7 @@ I named everything type-first (rg-, log-, dcr-) so I can tell what something is 
 
 The workstation isn't on the internet, so I first connected to the lab network with Tailscale on my laptop and waited for the coach to approve my device. Before trying RDP I pinged the workstation address from my access sheet. If the ping doesn't answer, RDP won't work either, and the error RDP gives you is less clear.
 
-Once the ping worked I connected with TODO (RDP client) and changed the password at first login.
+Once the ping worked I connected with Remote Desktop Connection (mstsc) and changed the password at first login.
 
 ### 2. Setting up the Azure side
 
@@ -59,11 +59,11 @@ The script installed the agent and opened a browser inside the VM for me to sign
 
 This prints a link and a code.
 
-**This is where I made a mistake.** I opened the link and entered the code in the browser inside the VM, through my RDP session. That is the same browser without MFA, so it failed the same way (TODO: exact message). The whole point of the device code is to do the sign-in somewhere you already have MFA, which is your own laptop. I ran the command again, entered the new code on my laptop's browser where I was already logged into the portal, and it finished with "Machine connected to Azure". A few minutes later the machine showed as Connected in Arc.
+**This is where I made a mistake.** I opened the link and entered the code in the browser inside the VM, through my RDP session. That is the same browser without MFA, so it failed the same way, with the same `RequestDisallowedByAzure` / 401 error about MFA. The whole point of the device code is to do the sign-in somewhere you already have MFA, which is your own laptop. I ran the command again, entered the new code on my laptop's browser where I was already logged into the portal, and it finished with "Machine connected to Azure". A few minutes later the machine showed as Connected in Arc.
 
 **Note for whoever does this next:** when PowerShell on the workstation gives you a link and a code, type them on your own laptop, not inside the RDP session.
 
-TODO: other problems I hit at this step, if any.
+Another problem I hit at this step: the Arc script printed a `(400) Bad Request` from `Invoke-WebRequest`. That turned out to be only the script failing to send its error report, not the real problem. The real causes to check are admin rights, the execution policy and the region. The Activity log shows what really happened for me: eight "'deny' Policy action" failures between 12:29 and 12:52 UTC (the region policy refusing my requests), then my "Write Azure Arc machines" failed at 12:53 UTC, and the one that went through was at 13:04 UTC, after the device-code sign-in on my laptop.
 
 ### 4. Choosing what to collect (chain A)
 
@@ -72,7 +72,7 @@ Arc makes the machine visible to Azure, but nothing is sent until a data collect
 - Windows Event Logs: Application and System at Critical, Error and Warning, plus the Security log (audit success and failure). I left Information off because it's far too noisy.
 - destination: my workspace. Everything from this rule lands in the `Event` table.
 
-Attaching the rule is what installs the Azure Monitor Agent on the machine as an Arc extension. I didn't download any installer myself. It showed as Succeeded under the machine's Extensions after about TODO minutes.
+Attaching the rule is what installs the Azure Monitor Agent on the machine as an Arc extension. I didn't download any installer myself. It showed as Succeeded under the machine's Extensions after about 10 minutes: the Activity log has "Install or Update an Azure Arc extensions" at 14:21 UTC, 9 minutes after I created the rule at 14:12 UTC.
 
 ### 5. Checking that data arrives
 
@@ -92,7 +92,7 @@ Then I started asking questions with KQL (all in `queries.kql`): when the machin
 
 Next I collected the Security log the way Sentinel expects it. In Sentinel I installed the Windows Security Events solution from the Content hub. Then I opened the **Windows Security Events via AMA** connector (not the deprecated legacy one) and created dcr-securityevents for my machine with the **Common** event set. The default is "All", which is too much.
 
-It needed another TODO minutes before rows showed up in `SecurityEvent`, but there `Account`, `LogonType` and `IpAddress` are separate columns. The first rows I got (7 October 2026, around 15:08 UTC) were WKS-L58 logging on as NT AUTHORITY\SYSTEM with logon type 5. That's Windows starting services, not a person. One RDP connection gives several 4624 events at once (a type 3 for the network authentication, then a 10 or a 7). The IP address is the lab gateway (10.50.0.1), not my laptop.
+The connector created the rule at 15:02 UTC and attached it to my machine at 15:04 UTC. It needed another 4 minutes before rows showed up in `SecurityEvent`, but there `Account`, `LogonType` and `IpAddress` are separate columns. The first rows I got (7 October 2026, around 15:08 UTC) were WKS-L58 logging on as NT AUTHORITY\SYSTEM with logon type 5. That's Windows starting services, not a person. One RDP connection gives several 4624 events at once (a type 3 for the network authentication, then a 10 or a 7). The IP address is the lab gateway (10.50.0.1), not my laptop.
 
 At that point every security event was being collected twice, once per chain. So I edited dcr-windowsevents and unticked the two Security boxes, at 15:09 UTC. The last Security row to reach `Event` arrived at 15:12 UTC, a few minutes after I saved, while the agent picked up the new rule. Nothing has arrived there since, while `SecurityEvent` kept getting new rows.
 
@@ -110,7 +110,7 @@ At that point every security event was being collected twice, once per chain. So
 | Who usually uses it | IT operations | Security teams |
 | Cost | Per GB | Per GB, so running both means paying twice for security events |
 
-**Why I kept only chain B for the Security log** (TODO: check this sounds like me):
+**Why I kept only chain B for the Security log:**
 Running both meant every logon was stored twice in two different tables. That's two places to look for the same thing, results that can drift apart, and double the cost. Chain B gives me the fields I actually search on, and Sentinel's detections and the next missions are built on `SecurityEvent`. Chain A is still useful for what chain B can't collect: the Application and System logs.
 
 ---
@@ -121,4 +121,4 @@ Running both meant every logon was stored twice in two different tables. That's 
 - Use an admin PowerShell window and set the execution policy before running the Arc script.
 - Do the device-code sign-in on your own laptop, not in the VM.
 - Give the agent 15–30 minutes and check Heartbeat before deciding something's broken.
-- TODO: anything else
+- Before trusting "nothing in the SIEM", check which log the event is written to and whether a DCR collects it. In the CTF, the `qemu-ga` trace was in the Application log, and the change to my domain account was logged on DC01, which isn't connected to my workspace at all.
