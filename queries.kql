@@ -1,5 +1,4 @@
 // Mission 01: the KQL I ran in Sentinel → Logs
-// TODO: remove anything I didn't actually run
 
 // Is my machine showing up at all yet?
 Heartbeat
@@ -47,8 +46,27 @@ Event
 | where EventLog == "Security"
 | summarize LastSecurityRow = max(TimeGenerated)
 
-// Step 6: what happened on my machine during the window when it wasn't me? (TODO: fill in the times)
+// Step 6: what happened on my machine during the window when it wasn't me? (the intrusion was on 9 Oct 2026 at 12:30:07 UTC)
 SecurityEvent
-| where TimeGenerated between (datetime(TODO) .. datetime(TODO))
+| where TimeGenerated between (datetime(2026-10-09 12:25) .. datetime(2026-10-09 12:35))
 | summarize count() by EventID, Activity
 | order by count_ desc
+
+// Step 6: every account-management event in the last 30 days (this is how I found svc_backup without knowing the Event ID first)
+SecurityEvent
+| where TimeGenerated > ago(30d)
+| where EventID in (4720, 4722, 4724, 4725, 4726, 4728, 4732, 4738, 4781)
+| project TimeGenerated, EventID, Activity, SubjectAccount, TargetAccount, MemberSid, Computer
+| order by TimeGenerated asc
+
+// Step 6: was I connected when it happened? (my RDP logons that day)
+SecurityEvent
+| where TimeGenerated between (datetime(2026-10-09) .. datetime(2026-10-10))
+| where EventID == 4624 and LogonType in (10, 7)
+| project TimeGenerated, LogonType, IpAddress, TargetAccount
+
+// What just happened?: is the qemu-ga trace in my SIEM? (0 results: only Critical/Error/Warning from Application are collected)
+Event
+| where Source == "qemu-ga" or RenderedDescription has "qemu-ga"
+| sort by TimeGenerated desc
+| take 10
