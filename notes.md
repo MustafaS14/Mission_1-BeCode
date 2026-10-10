@@ -152,7 +152,7 @@ When you log on with a domain account, your workstation does not know your passw
 4. Or in PowerShell: `Get-Acl "$env:USERPROFILE\Desktop\Identity in hamilton.corp" | Select-Object -ExpandProperty Owner`
 5. Keep only the part before the backslash.
 
-**Answer:** TODO: check the owner shown in Properties and write the flag here. It is a built-in account, not a person. `HAM{WKS-L58}` (from `WKS-L58\Administrators`) was rejected, but that came from the wrong file.
+**Answer:** The Properties window shows the owner as `Administrators (WKS-L58\Administrators)`, the local Administrators group, not me and not a person. But `HAM{WKS-L58}` was rejected: the Properties window puts the computer name in front, while Windows itself writes this group as `BUILTIN\Administrators` (that's what `Get-Acl` returns). So the part before the backslash is `BUILTIN` → `HAM{BUILTIN}`
 
 ### 9. Which program wrote it?
 
