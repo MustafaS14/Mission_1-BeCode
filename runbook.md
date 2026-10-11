@@ -39,6 +39,14 @@ Then I created, in this order:
 
 Last, I set a daily cap of 0.2 GB on the workspace (Usage and estimated costs → Daily cap). Our credit is limited, and one noisy log source could use a lot of it overnight. The cap is a safety net, not a way to save money every day: once it's hit, collection stops until the next day, so it has to sit well above normal volume.
 
+**The cap is also a blind spot** (added after coach feedback). An attacker can use the same behaviour against me. They flood the workstation with cheap noise until the cap is hit, for example a loop of failed logons (4625, which the "Common" set collects). After that, nothing more reaches the workspace until the daily reset, and they can act without being seen. With a cap of only 0.2 GB that doesn't take much: very roughly a couple of hundred thousand security events. The same flood can also roll over the workstation's own Security log (20 MB by default, overwrite when full), which wipes the local evidence too.
+
+What I'd do about it:
+- **Alert when the cap is hit.** Log Analytics writes an `OverQuota` record to `_LogOperation` when collection stops. A log alert on it tells me the SIEM went blind, and when (query in `queries.kql`).
+- **Alert before it's hit.** Compare today's billable volume in the `Usage` table against the cap (for example at 80%), and against the normal hourly volume. A sudden jump is suspicious in itself.
+- **Treat the flood as the incident.** A spike of 4625s, a cleared log (1102) or an audit policy change (4719) is a signal, not just noise to filter out.
+- **In a real SOC**, security tables usually aren't hard-capped. Cost is controlled with budgets and alerts, commitment tiers, and choosing which events to collect, so an attacker can't switch off collection by making noise. In this lab I keep the cap because the credit is limited, but now I watch it.
+
 ### 3. Connecting the workstation with Azure Arc
 
 Azure can't see a machine that lives on our lab network, so the first job is to register it with Azure Arc. I started from Azure Arc → Machines → Onboard existing machines and used these settings: same resource group and region, Windows, SQL Server option unticked, public endpoint, manual authentication. I didn't enable anything paid.
@@ -86,6 +94,27 @@ To find my own RDP logon, I searched `SecurityEvent` for successful logons (4624
 
 Logon type 7 means I reconnected to a session that was already open. A brand-new RDP session would show as 10. The address is the lab gateway that relays my connection, not my laptop.
 
+#### Why a 7 and not a 10? (follow-up after coach feedback)
+
+At first I called this "my first RDP logon". That's wrong. It is only the **earliest RDP logon my SIEM has**. A type 7 means a session already existed, so a type 10 must have happened before it. The timeline shows when:
+
+| When (7 Oct 2026, UTC) | What | Visible in the SIEM? |
+|---|---|---|
+| Morning, before 12:29 | Step 1: first RDP connection, password change at first login. This is the new session, the **type 10** | No. Nothing was connected yet |
+| 12:29 → 13:04 | Arc onboarding (MFA errors, then connected) | No. Arc only, no DCR yet |
+| 14:12 / 14:16 | `dcr-windowsevents` created / first heartbeat. Security log starts going to `Event` | Only in `Event`, which my query didn't search |
+| 15:08 | First rows in `SecurityEvent` | Yes. This is where my query's window starts |
+| 23:16:47 | Reconnect to the session I had left open, **type 7** | Yes |
+
+I never signed out. I only closed the RDP window, which disconnects the session but leaves it running (and locked). Every time I came back, Windows logged a reconnect/unlock (type 7), not a new logon (type 10). That's also why my only RDP logon on 9 October (09:27:44 UTC) is a type 7: it's still the same session from the first day.
+
+So the type 10 almost certainly took place **before collection started**. My SIEM can't prove it either way. This is the same lesson as the CTF: no collection ≠ no activity. The SIEM's history starts when the DCR starts, not when the machine starts.
+
+How to confirm it (queries and commands in `queries.kql`):
+- Search the `Event` table too, not only `SecurityEvent`. Chain A collected the Security log from about 14:16 to 15:12, before I removed it, so any 10 or 7 from that hour is there.
+- Look on the workstation itself. The local Security log may still hold events from before the agent was installed, if it hasn't rolled over yet (default size is only 20 MB). Use `Get-WinEvent` with `-Oldest`.
+- Check the `Microsoft-Windows-TerminalServices-LocalSessionManager/Operational` log on the workstation: event 21 = session logon, 24 = disconnected, 25 = reconnected. It shows the whole life of a session more clearly than 4624. The matching Security events are 4778 (session reconnected) and 4779 (session disconnected).
+
 Then I started asking questions with KQL (all in `queries.kql`): when the machine last checked in, whether its data is current (event time vs ingestion time, to catch a wrong clock), what levels of events come in, and who logged on. The logons were in `Event`, but the account and logon type were buried in one long text field.
 
 ### 6. Moving the Security log to the Sentinel connector (chain B)
@@ -122,3 +151,5 @@ Running both meant every logon was stored twice in two different tables. That's 
 - Do the device-code sign-in on your own laptop, not in the VM.
 - Give the agent 15–30 minutes and check Heartbeat before deciding something's broken.
 - Before trusting "nothing in the SIEM", check which log the event is written to and whether a DCR collects it. In the CTF, the `qemu-ga` trace was in the Application log, and the change to my domain account was logged on DC01, which isn't connected to my workspace at all.
+- Don't call anything "the first" in the SIEM. It's only the earliest thing collected. My "first" RDP logon was a type 7 because the real type 10 happened before any DCR existed.
+- Set an alert on the daily cap the same day as the cap itself. Otherwise the safety net silently turns into a blind spot.
