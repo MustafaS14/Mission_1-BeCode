@@ -94,26 +94,26 @@ To find my own RDP logon, I searched `SecurityEvent` for successful logons (4624
 
 Logon type 7 means I reconnected to a session that was already open. A brand-new RDP session would show as 10. The address is the lab gateway that relays my connection, not my laptop.
 
-#### Why a 7 and not a 10? (follow-up after coach feedback)
+#### Why a 7 and not a 10? (follow-up after coach feedback, confirmed on the workstation)
 
-At first I called this "my first RDP logon". That's wrong. It is only the **earliest RDP logon my SIEM has**. A type 7 means a session already existed, so a type 10 must have happened before it. The timeline shows when:
+At first I called this "my first RDP logon". That's wrong. It is only the **earliest RDP logon my SIEM has**. A type 7 means a session already existed, so a type 10 must have happened before it. The SIEM couldn't show me that, so I checked on the workstation itself. The local Security log goes back to 21 September (it never rolled over), and the `TerminalServices-LocalSessionManager/Operational` log records every session logon (21), sign-out (23), disconnect (24) and reconnect (25). The VM's clock is set to Romance Standard Time (UTC+2 in October), so I converted everything to UTC.
 
-| When (7 Oct 2026, UTC) | What | Visible in the SIEM? |
-|---|---|---|
-| Morning, before 12:29 | Step 1: first RDP connection, password change at first login. This is the new session, the **type 10** | No. Nothing was connected yet |
-| 12:29 → 13:04 | Arc onboarding (MFA errors, then connected) | No. Arc only, no DCR yet |
-| 14:12 / 14:16 | `dcr-windowsevents` created / first heartbeat. Security log starts going to `Event` | Only in `Event`, which my query didn't search |
-| 15:08 | First rows in `SecurityEvent` | Yes. This is where my query's window starts |
-| 23:16:47 | Reconnect to the session I had left open, **type 7** | Yes |
+| When (7 Oct 2026, UTC) | What | Where the evidence is | In the SIEM? |
+|---|---|---|---|
+| 09:38:29 | **4624 type 10** (two events, the normal pair for an admin's split token). My first RDP connection, password change at first login | Local Security log | No. Nothing was connected yet |
+| 09:38:31 | Session logon (21) | LocalSessionManager log | No |
+| 12:29 → 13:04 | Arc onboarding (MFA errors, then connected) | Activity log | No. Arc only, no DCR yet |
+| 14:12 / 14:16 | `dcr-windowsevents` created / first heartbeat. Security log starts going to `Event` | Workspace | Only in `Event`, which my first query didn't search. It has no type 10 or 7 for that hour, which is correct: I was connected the whole time, so there was no new logon |
+| 15:08 | First rows in `SecurityEvent` | Workspace | Yes |
+| 15:15:03 | First disconnect (24) | LocalSessionManager log | No |
+| 16:26:39 → 22:31 | Several reconnects and disconnects (25/24). **None of them wrote a 4624 type 7 or 10** | LocalSessionManager log | No |
+| 23:16:47 | **4624 type 7** (two pairs), the first reconnect where I had to unlock the session | Local Security log **and** `SecurityEvent` | Yes. Same second in both |
 
-I never signed out. I only closed the RDP window, which disconnects the session but leaves it running (and locked). Every time I came back, Windows logged a reconnect/unlock (type 7), not a new logon (type 10). That's also why my only RDP logon on 9 October (09:27:44 UTC) is a type 7: it's still the same session from the first day.
-
-So the type 10 almost certainly took place **before collection started**. My SIEM can't prove it either way. This is the same lesson as the CTF: no collection ≠ no activity. The SIEM's history starts when the DCR starts, not when the machine starts.
-
-How to confirm it (queries and commands in `queries.kql`):
-- Search the `Event` table too, not only `SecurityEvent`. Chain A collected the Security log from about 14:16 to 15:12, before I removed it, so any 10 or 7 from that hour is there.
-- Look on the workstation itself. The local Security log may still hold events from before the agent was installed, if it hasn't rolled over yet (default size is only 20 MB). Use `Get-WinEvent` with `-Oldest`.
-- Check the `Microsoft-Windows-TerminalServices-LocalSessionManager/Operational` log on the workstation: event 21 = session logon, 24 = disconnected, 25 = reconnected. It shows the whole life of a session more clearly than 4624. The matching Security events are 4778 (session reconnected) and 4779 (session disconnected).
+What this shows:
+- **The type 10 happened at 09:38:29 UTC, almost three hours before the first Arc attempt.** It exists only in the workstation's own log. The SIEM's history starts when the DCR starts, not when the machine starts: no collection ≠ no activity.
+- **I never signed out.** There is no 23 after 7 October, only 24/25 pairs. That's why every later RDP logon is a reconnect, including the 09:27:44 UTC one on 9 October.
+- **The SIEM's "earliest" (23:16:47) is correct.** The local log has exactly the same timestamp, so it wasn't a time-range mistake.
+- **Not every reconnect is a type 7.** I reconnected at least seven times before 23:16:47, but only that one wrote a type 7. A reconnect into a session that isn't locked doesn't need an unlock logon. It most likely only left a network logon (type 3, from NLA), which my query filtered out. And 4778 (session reconnected) is missing completely: it needs *Audit Other Logon/Logoff Events*, which isn't enabled on this machine. So **4624 type 7/10 alone undercounts RDP activity**. To follow sessions properly I'd enable that audit subcategory (4778/4779) and collect the LocalSessionManager log.
 
 Then I started asking questions with KQL (all in `queries.kql`): when the machine last checked in, whether its data is current (event time vs ingestion time, to catch a wrong clock), what levels of events come in, and who logged on. The logons were in `Event`, but the account and logon type were buried in one long text field.
 
@@ -151,5 +151,5 @@ Running both meant every logon was stored twice in two different tables. That's 
 - Do the device-code sign-in on your own laptop, not in the VM.
 - Give the agent 15–30 minutes and check Heartbeat before deciding something's broken.
 - Before trusting "nothing in the SIEM", check which log the event is written to and whether a DCR collects it. In the CTF, the `qemu-ga` trace was in the Application log, and the change to my domain account was logged on DC01, which isn't connected to my workspace at all.
-- Don't call anything "the first" in the SIEM. It's only the earliest thing collected. My "first" RDP logon was a type 7 because the real type 10 happened before any DCR existed.
+- Don't call anything "the first" in the SIEM. It's only the earliest thing collected. My "first" RDP logon was a type 7 because the real type 10 (09:38:29 UTC) happened before any DCR existed. It was still in the workstation's local log.
 - Set an alert on the daily cap the same day as the cap itself. Otherwise the safety net silently turns into a blind spot.

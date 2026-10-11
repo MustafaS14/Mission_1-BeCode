@@ -42,7 +42,7 @@ The name is also a typical trick: `svc_backup` looks like a service account, the
 
 ## Why I know it wasn't me
 
-- My only RDP logon that day was at 09:27:44 UTC (logon type 7, from the lab gateway 10.50.0.1), three hours earlier. It's a type 7 because it was a reconnect to the session I opened on day one and never signed out of. The new session (type 10) happened before my SIEM collected anything (see runbook, step 5).
+- My only RDP logon that day was at 09:27:44 UTC (logon type 7, from the lab gateway 10.50.0.1), three hours earlier. It's a type 7 because it was a reconnect to the session I opened on day one and never signed out of. The new session (type 10) was on 7 October at 09:38:29 UTC, before my SIEM collected anything. I found it in the workstation's local Security log (see runbook, step 5).
 - Between 11:30 and 13:30 UTC there's no logon of type 10 or 7 at all, only the machine account's network logons (type 3) and SYSTEM's service logons (type 5).
 - The events are signed by the computer account, not by `HAMILTON\mustafa`.
 

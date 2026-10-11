@@ -36,7 +36,7 @@ SecurityEvent
 
 // When was my own first RDP logon? (logon type 10 = new session, 7 = reconnecting to an open one)
 // NB: this only returns the earliest RDP logon in SecurityEvent (from ~15:08 UTC on 7 Oct). It came back as a 7,
-// so the real type 10 happened before collection started. See the two follow-up checks below.
+// so the real type 10 happened before collection started: confirmed in the local Security log at 7 Oct 09:38:29 UTC (see runbook, step 5).
 SecurityEvent
 | where EventID == 4624 and LogonType in (10, 7)
 | project TimeGenerated, LogonType, IpAddress
